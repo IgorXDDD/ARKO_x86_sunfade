@@ -10,7 +10,13 @@ void sunfade(void* img, int width, int height ,int dist, int x,int y );
 
 
 
-/**/
+/*24.void sunfade(void *img, int width, int height, int dist, int x, inty);
+Rozjaśnienie obrazu od zadanego punktu.
+ Kolor każdego piksel powinien zostać zinterpolowany liniowo pomiędzy
+  kolorem oryginalnym i bielą proporcjonalnie do kwadratu odległości 
+  piksela od piksela o współrzędnych x,y. Piksele położone dalej od 
+  krawędzi niż wartość dist nie podlegają modyfikacji.*/
+//program dziala dla 24bpp bitmap
 int main (int argc, char** argv) 
 {
 
