@@ -3,12 +3,12 @@
     global sunfade
 
 ; arguments
-%define img     [ebp+8]
-%define width   [ebp+12]
-%define height  [ebp+16]
-%define dist    [ebp+20]
-%define x_circle      [ebp+24]
-%define y_circle      [ebp+28]
+%define img         [ebp+8]
+%define width       [ebp+12]
+%define height      [ebp+16]
+%define dist        [ebp+20]
+%define x_circle    [ebp+24]
+%define y_circle    [ebp+28]
 
 ; local variables
 %define row_bytes   [ebp-4]
@@ -33,19 +33,22 @@ sunfade:
 
     ; img source
     mov     esi, img        ; image starts with pixels (handeld in C program)
+                            ; esi points to the begining of current line (row)
+                            ; it's incremented by row width (row_bytes) after every line iteration
 
     ; calculate row size
     mov     eax, width      ; row size in pixels
-    imul    eax, 3          ; row size* in bytes (3 bytes per pixel -3 subpixels)
-    add     eax, 3          ; 3 is the maximum value to fit on 2 least sign. bits
-    and     eax, 0fffffffch ; zero out 2 least sign. bits, to round up to multiple of 4
+    lea     eax, [eax+eax*2]  ; row size* in bytes (3 bytes per pixel -3 subpixels)  
+    ;mul    eax, 3          ; row size* in bytes (3 bytes per pixel -3 subpixels)
+    add     eax, 3          ; 3 is the maximum value to fit on 2 least significant bits
+    and     eax, 0fffffffch ; zero out 2 least significant bits, to round up to multiple of 4
 
-    mov     row_bytes, eax  ; row size in bytes (multiple of 4, padding handled)
+    mov     row_bytes, eax  ; row size in bytes (multiple of 4, padding is handled)
 
     mov     ecx, height     ; ecx  - how many lines (rows) are left  to go?
 
 
-;===========================================================
+
 ;____________________ Algorithm begins _____________________ 
 
 next_line:
@@ -56,7 +59,6 @@ next_line:
 
 fade:
 
-    ;push    edx        ;
     push    ebx         ; remember the index
 
     xor     edx, edx    ; edx zero'ed before division
@@ -90,17 +92,14 @@ fade:
 
 
     pop     ebx         ; recall the index
-    ;pop     edx
 
     mov     eax, dx_2   ; Pythagorean theorem
     add     eax, dy_2   ; eax = (dx^2 +dy^2) 
     mov     d_2, eax        ; d_2 = d^2 = (dx^2 +dy^2) 
     cmp     eax, dist_2     ; d^2 - dist^2
-    jae     next_pix   ; if d^2 >= dist^2 then there is no need to change anything, go to next pixel
+    jae     next_pix   ; if d^2 >= dist^2 then there is no need to change anything, go to the next pixel
 
   
-
-;=================================================================================================  
 ;   ---------- SUNFADING EVERY SUBPIXEL ----------
 ; everything is multiplied and then divided by 256 (2^8)
 ; without it, program didn't work properly - there was no fading, just white circle
@@ -109,7 +108,7 @@ fade:
     push    ecx         ; counter of lines to proceed
     push    edi
 
-    xor     edx, edx    ;edx zero'ed before division
+    xor     edx, edx    ;edx zero'ed before division, after division edx is concatenated
 
     push    ebx         ; pixel index in a line - current pixel
     
@@ -118,8 +117,8 @@ fade:
     mov     ebx, dist_2
     div     ebx         ; eax = 256*(d^2) / dist^2
 
-    mov     ecx, eax    ; ecx = fading coefficient
-
+    mov     ecx, eax    ; ecx = (fading coefficient)*256 = 256*(d^2) / dist^2
+    ; to tutaj wystarczy tylko raz
     pop     ebx
 
     movzx   edx, byte [esi+ebx+0]   ; Get the blue subpixel
@@ -127,95 +126,61 @@ fade:
     ; fading formula: 255 - (255-color)*(d^2/dist^2)
     ; d - distance between circle center and procesed pixel
 
-    mov     eax, 255
-    sub     eax, edx
-    imul    eax, ecx    ; 
+    mov     al, 255
+    sub     al, dl
+    mul     cl   
 
-    shr     eax, 8      ; it was mulitplied by 256 before
-    mov     edi, 255
-    sub     edi, eax
-    mov     eax, edi
-
+    mov     al, 255
+    sub     al, ah
 
     mov     [esi+ebx+0], al     ; save blue
 
-;=================================================================================================
-
-    push    ebx         ; pixel index in a line - current pixel
-    xor     edx, edx    ;edx zero'ed before division
-
-    mov     eax, d_2
-    shl     eax, 8      ; eax = d_2 * 256, without it coefficient woudld be zero
-    mov     ebx, dist_2
-    div     ebx         ; eax = 256*(d^2) / dist^2
-
-    mov     ecx, eax    ; ecx = fading coefficient
-
-    pop     ebx
+;_____________________________next pixel (green)
 
     movzx   edx, byte [esi+ebx+1]   ; Get the green subpixel
 
     ; fading formula: 255 - (255-color)*(d^2/dist^2)
     ; d - distance between circle center and procesed pixel
 
-    mov     eax, 255
-    sub     eax, edx
-    imul    eax, ecx    ; 
+    mov     al, 255
+    sub     al, dl
+    mul     cl   
 
-    shr     eax, 8      ; it was mulitplied by 256 before
-    mov     edi, 255
-    sub     edi, eax
-    mov     eax, edi
-
+    mov     al, 255
+    sub     al, ah
 
     mov     [esi+ebx+1], al     ; save green
 
-;=================================================================================================  
-
-    push    ebx         ; pixel index in a line - current pixel
-    xor     edx, edx    ; edx zero'ed before division
-
-    mov     eax, d_2
-    shl     eax, 8      ; eax = d_2 * 256, without it coefficient woudld be zero
-    mov     ebx, dist_2
-    div     ebx         ; eax = 256*(d^2) / dist^2
-
-    mov     ecx, eax    ; ecx = fading coefficient
-
-    pop     ebx
+;_____________________________next pixel (red)
 
     movzx   edx, byte [esi+ebx+2]   ; Get the red subpixel
 
     ; fading formula: 255 - (255-color)*(d^2/dist^2)
     ; d - distance between circle center and procesed pixel
 
-    mov     eax, 255
-    sub     eax, edx
-    imul    eax, ecx    ; 
+    mov     al, 255
+    sub     al, dl
+    mul     cl    
 
-    shr     eax, 8      ; it was mulitplied by 256 before 
-    mov     edi, 255
-    sub     edi, eax
-    mov     eax, edi
-
+    mov     al, 255
+    sub     al, ah
 
     mov     [esi+ebx+2], al     ; save red
-    
+
+;__________________________________________________________________________________________  
+;   ====================== FADING OF THIS PIXEL IS COMPLETED ======================
     pop     edi
     pop     ecx
 
-;=================================================================================================  
-;   ====================== FADING OF THIS PIXEL IS COMPLETED ======================
 
 next_pix:
     add     ebx, 3      ; go to next pixel (move 24 b - 3 subpixles)    
     dec     edi         ; one less pixel to process in line
     jnz     fade        ; is line already over? if no go to next pixel
 
-
-    add     esi, row_bytes  ; if it is over 
+    add     esi, row_bytes  ; if it is over (if the row is over)
     dec     ecx             ; decrement lines to proceed amount
-    jnz     next_line       ; if not 0, continut to next line
+    jnz     next_line       ; if not 0, continue to next line
 
     ; epliog
     pop     edi
